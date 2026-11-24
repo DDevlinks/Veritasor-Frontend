@@ -1,5 +1,6 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { formatSpoken, isAnnounceMilestone } from './sessionExpiryAnnouncements';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -25,15 +26,32 @@ export const SessionExpiryWarning = ({
 }: SessionExpiryWarningProps) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const extendButtonRef = useRef<HTMLButtonElement>(null);
+  const hasAnnouncedRef = useRef(false);
+  const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       triggerRef.current = document.activeElement as HTMLElement;
-      dialogRef.current?.focus();
+      // Least-destructive action first: focus "Extend Session".
+      (extendButtonRef.current ?? dialogRef.current)?.focus();
     } else {
       triggerRef.current?.focus();
     }
   }, [isOpen]);
+
+  // Update the polite live region only on open and at milestones.
+  useEffect(() => {
+    if (!isOpen) {
+      hasAnnouncedRef.current = false;
+      setAnnouncement('');
+      return;
+    }
+    if (!hasAnnouncedRef.current || isAnnounceMilestone(timeLeft)) {
+      hasAnnouncedRef.current = true;
+      setAnnouncement(`Your session will expire in ${formatSpoken(timeLeft)}.`);
+    }
+  }, [isOpen, timeLeft]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,16 +111,24 @@ export const SessionExpiryWarning = ({
           <p id="session-warning-desc" className="modal-description">
             For your security, your session will expire in{' '}
             <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-              <span aria-live="assertive" aria-atomic="true">
-                {formatTime(timeLeft)}
-              </span>
+              {formatTime(timeLeft)}
             </span>
             . You can extend your session or re-authenticate to continue.
           </p>
+          <div
+            className="sr-only"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            data-testid="session-expiry-announcement"
+          >
+            {announcement}
+          </div>
         </div>
 
         <div className="modal-footer">
           <button
+            ref={extendButtonRef}
             type="button"
             className="modal-btn modal-btn-cancel"
             onClick={onExtendSession}
